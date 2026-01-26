@@ -4,7 +4,7 @@ sys.path.insert(0, '.')
 from db.models import init_db
 from db.crud import get_node, create_path, get_or_create_node, adjust_competing_paths
 from learning.word_learner import learn_word, learn_word_from_user, learn_word_deep
-from learning.grammar_learner import detect_pattern
+from learning.grammar_learner import detect_pattern, init_grammar_patterns
 from learning.meaning_learner import learn_relation, learn_property
 from reasoning.parser import tokenize
 from reasoning.graph_traversal import traverse, find_property, traverse_deep, format_tree
@@ -45,11 +45,13 @@ def process_query(query):
         if existing:
             print(f"  {token:<15} {'✓':<10} {'skip':<15} database")
         else:
-            node, created, source = learn_word(token)
+            node, created, source, connections = learn_word_deep(token, max_depth=2)
             if created:
                 print(f"  {token:<15} {'✗':<10} {'learned':<15} {source}")
                 if node and node.definition:
                     print(f"    → {node.type}: {node.definition[:60]}{'...' if len(node.definition or '') > 60 else ''}")
+                if connections > 0:
+                    print(f"    → Deep connections: {connections}")
             elif node:
                 print(f"  {token:<15} {'✓':<10} {'exists':<15} {source}")
             else:
@@ -135,6 +137,84 @@ def handle_definition_query(pattern_info):
     return all_paths, None, None
 
 
+def handle_property_of_query(pattern_info):
+    """Handle 'what is X of Y?' queries - asking for property X of entity Y"""
+    property_name = pattern_info["property"]
+    entity = pattern_info["entity"]
+    
+    print(f"\nSTEP 5 — Looking for '{property_name}' of '{entity}':")
+    
+    entity_node = get_node(entity)
+    paths = traverse(entity, max_depth=5)
+    property_paths = [p for p in paths if property_name in p.get("relation", "") or property_name in p.get("to", "")]
+    
+    if property_paths:
+        print(f"  Found {len(property_paths)} relevant paths")
+        print(f"\nSTEP 6 — Answer:")
+        for p in property_paths[:5]:
+            print(f"  {entity} → {p['relation']} → {p['to']}")
+        return paths, True
+    
+    print(f"  No direct '{property_name}' found. Trying deep learning...")
+    
+    print(f"\nSTEP 5.1 — Deep Learning '{entity}' to find '{property_name}':")
+    node, created, source, connections = learn_word_deep(entity, max_depth=3)
+    
+    paths = traverse(entity, max_depth=5)
+    property_paths = [p for p in paths if property_name in p.get("relation", "") or property_name in p.get("to", "")]
+    
+    if property_paths:
+        print(f"  Found {len(property_paths)} paths after deep learning!")
+        print(f"\nSTEP 6 — Answer:")
+        for p in property_paths[:5]:
+            print(f"  {entity} → {p['relation']} → {p['to']}")
+        return paths, True
+    
+    print(f"\nSTEP 5.2 — Checking related concepts for '{property_name}':")
+    related_paths = traverse(entity, max_depth=3)
+    for p in related_paths:
+        related_word = p.get("to", "")
+        if related_word:
+            related_node = get_node(related_word)
+            if related_node and related_node.definition:
+                if property_name in related_node.definition.lower():
+                    print(f"  Found '{property_name}' hint in related concept '{related_word}'")
+                    print(f"    Definition: {related_node.definition[:80]}...")
+                    
+                    related_deeper = traverse(related_word, max_depth=2)
+                    for rp in related_deeper:
+                        if property_name in rp.get("relation", "").lower() or property_name in rp.get("to", "").lower():
+                            print(f"\nSTEP 6 — Answer (via '{related_word}'):")
+                            print(f"  {entity} → related_to → {related_word} → {rp['relation']} → {rp['to']}")
+                            create_path(entity, f"has_{property_name}", rp['to'], confidence=0.7)
+                            return paths, True
+    
+    print(f"\nSTEP 5.3 — Deep Learning '{property_name}' for reverse lookup:")
+    prop_node, prop_created, prop_source, prop_conns = learn_word_deep(property_name, max_depth=2)
+    
+    if prop_node and prop_node.definition:
+        entity_node = get_node(entity)
+        if entity_node and entity_node.definition:
+            from learning.word_learner import extract_definition_words
+            prop_words = set(extract_definition_words(prop_node.definition))
+            entity_words = set(extract_definition_words(entity_node.definition))
+            shared = prop_words & entity_words
+            if shared:
+                print(f"  Shared concepts: {', '.join(list(shared)[:5])}")
+    
+    print(f"\n  Could not find '{property_name}' of '{entity}' through deep learning.")
+    print(f"\nSTEP 6 — Learning from user:")
+    print(f"  What is the {property_name} of {entity}?")
+    answer = input("  > ").strip()
+    
+    if answer and answer.lower() != 'skip':
+        get_or_create_node(answer, node_type=property_name)
+        create_path(entity, f"has_{property_name}", answer, confidence=1.0)
+        print(f"  Learned: {entity} has {property_name} → {answer}")
+        return [], True
+    return [], False
+
+
 def handle_property_query(pattern_info):
     subject = pattern_info["subject"]
     property_name = pattern_info["property"]
@@ -184,6 +264,122 @@ def handle_correction(subject, property_name, new_answer):
     
     print(f"  Updated knowledge about {subject} being {property_name}.")
     return True
+
+
+def handle_inferred_query(pattern_info):
+    """Handle queries where intent was inferred from graph traversal"""
+    intent = pattern_info.get("intent", "unknown")
+    focus = pattern_info.get("focus", "")
+    definitions = pattern_info.get("definitions", {})
+    related = pattern_info.get("related", {})
+    options = pattern_info.get("clarifying_options", [])
+    pattern_match = pattern_info.get("pattern_match", {})
+    tokens = pattern_info.get("tokens", [])
+    
+    print(f"\nSTEP 5 — Intent Inference (analyzing against known patterns):")
+    print(f"  Inferred intent: {intent}")
+    print(f"  Focus word: '{focus}'")
+    
+    if intent == "greeting" and focus:
+        print(f"\n  This looks like a greeting!")
+        print(f"  How should I respond to '{focus}'?")
+        response = input("  Response: ").strip()
+        if response:
+            pattern_key = " ".join(tokens) if tokens else focus
+            get_or_create_node(pattern_key, node_type="learned_pattern")
+            get_or_create_node(response, node_type="response")
+            create_path(pattern_key, "responds_with", response, confidence=1.0)
+            create_path(pattern_key, "pattern_type", "greeting", confidence=1.0)
+            print(f"  Learned: '{pattern_key}' → responds_with → '{response}'")
+        return
+    
+    if intent == "request" and focus:
+        print(f"\n  This looks like an indirect request about '{focus}'!")
+        print(f"  I know these patterns for requests:")
+        print(f"    1. \"what is {focus}?\" - ask for definition")
+        print(f"    2. \"tell me {focus}\" - request information")
+        print(f"    3. Teach me how to respond to this specific phrase")
+        choice = input("  Choose (1/2/3): ").strip()
+        
+        if choice == "1":
+            print(f"\n  Converting to: 'what is {focus}?'")
+            from reasoning.parser import tokenize
+            new_tokens = tokenize(f"what is {focus}?")
+            from learning.grammar_learner import detect_pattern
+            new_pattern = detect_pattern(new_tokens)
+            if new_pattern:
+                print(f"  Pattern recognized: {new_pattern['type']}")
+        elif choice == "2":
+            print(f"\n  Converting to: 'tell me {focus}'")
+        elif choice == "3":
+            print(f"  What should I respond to '{' '.join(tokens)}'?")
+            response = input("  Response: ").strip()
+            if response:
+                pattern_key = " ".join(tokens)
+                get_or_create_node(pattern_key, node_type="learned_pattern")
+                get_or_create_node(response, node_type="response")
+                create_path(pattern_key, "responds_with", response, confidence=1.0)
+                create_path(pattern_key, "pattern_type", "request", confidence=1.0)
+                print(f"  Learned: '{pattern_key}' → responds_with → '{response}'")
+        return
+    
+    if pattern_match:
+        closest = pattern_match.get("closest_pattern", {})
+        suggestions = pattern_match.get("suggestions", [])
+        all_matches = pattern_match.get("all_matches", [])
+        
+        print(f"\n  Closest known pattern: '{closest.get('name', 'unknown')}'")
+        print(f"  Pattern type: {closest.get('type', 'unknown')}")
+        print(f"  Example: {closest.get('example', '')}")
+        
+        if all_matches and len(all_matches) > 1:
+            print(f"\n  Other possible patterns:")
+            for pat, score in all_matches[1:3]:
+                print(f"    - '{pat['name']}' (example: {pat['example']})")
+    
+    if definitions:
+        print(f"\n  Definitions found:")
+        for word, defn in definitions.items():
+            short_def = defn[:80] + "..." if len(defn) > 80 else defn
+            print(f"    {word}: {short_def}")
+    
+    print(f"\nSTEP 6 — Pattern-Based Clarification:")
+    
+    if pattern_match and pattern_match.get("suggestions"):
+        suggestions = pattern_match["suggestions"]
+        print(f"  I think you might be trying to say one of these:")
+        for i, s in enumerate(suggestions[:3], 1):
+            print(f"    {i}. \"{s}\"")
+        print(f"  Which one matches your intent? (1/2/3 or rephrase)")
+        
+        answer = input("  > ").strip()
+        
+        if answer in ["1", "2", "3"]:
+            idx = int(answer) - 1
+            if idx < len(suggestions):
+                suggested = suggestions[idx]
+                print(f"\n  Processing: '{suggested}'")
+                from reasoning.parser import tokenize
+                new_tokens = tokenize(suggested)
+                from learning.grammar_learner import detect_pattern
+                new_pattern = detect_pattern(new_tokens)
+                if new_pattern and new_pattern["type"] != "inferred_query":
+                    print(f"  Pattern recognized: {new_pattern['type']}")
+        elif answer:
+            print(f"  Let me try to understand '{answer}'...")
+    elif pattern_match:
+        closest = pattern_match.get("closest_pattern", {})
+        print(f"  Your input seems similar to '{closest.get('name', 'unknown')}'")
+        print(f"  Try rephrasing like: \"{closest.get('example', '')}\"")
+        answer = input("  > ").strip()
+    else:
+        print(f"  I couldn't match this to any known pattern.")
+        print(f"  Known patterns I understand:")
+        from learning.grammar_learner import get_known_patterns
+        for p in get_known_patterns()[:5]:
+            print(f"    - {p['name']} (e.g., \"{p['example']}\")")
+        print(f"  Try rephrasing using one of these formats.")
+        answer = input("  > ").strip()
 
 
 def handle_request(pattern_info):
@@ -266,6 +462,7 @@ def handle_special_query(pattern_info):
 def main():
     print("Initializing database...")
     init_db()
+    init_grammar_patterns()
     print("Knowledge Graph Ready.")
     print("Supports: 'what is X?' and 'is X Y?'")
     print("Type 'exit' to quit.\n")
@@ -376,6 +573,11 @@ def main():
                     pending_context = context
             pending_subject = None
             pending_property = None
+        
+        elif pattern_info["type"] == "property_of_query":
+            handle_property_of_query(pattern_info)
+            pending_subject = None
+            pending_property = None
             
         elif pattern_info["type"] == "property_query":
             subject = pattern_info["subject"]
@@ -394,6 +596,11 @@ def main():
             pending_subject = None
             pending_property = None
         
+        elif pattern_info["type"] == "inferred_query":
+            handle_inferred_query(pattern_info)
+            pending_subject = None
+            pending_property = None
+        
         elif pattern_info["type"].endswith("_query"):
             handle_special_query(pattern_info)
             pending_subject = None
@@ -403,6 +610,14 @@ def main():
             print(f"\nSTEP 5 — Learned Pattern Recognized:")
             print(f"  Pattern: {pattern_info.get('pattern_key', '')}")
             print(f"  Type: {pattern_info.get('response_type', 'learned')}")
+            if pattern_info.get("similarity_score"):
+                print(f"  Similarity: {pattern_info['similarity_score']:.0%}")
+                if pattern_info.get('shared_words'):
+                    print(f"  Direct matches: {', '.join(pattern_info.get('shared_words', []))}")
+                if pattern_info.get('deep_matches'):
+                    print(f"  Deep matches: {', '.join(pattern_info.get('deep_matches', []))}")
+                if pattern_info.get('depth_searched'):
+                    print(f"  Depth searched: {pattern_info['depth_searched']}")
             print(f"\nResponse: {pattern_info.get('response', '')}")
             pending_subject = None
             pending_property = None

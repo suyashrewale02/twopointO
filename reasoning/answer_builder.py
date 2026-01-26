@@ -65,8 +65,8 @@ def find_useful_concepts(concepts, subject):
     for word in subject_words:
         paths = get_paths_from(word)
         for p in paths:
-            if p.relation in ['related_to', 'is_a', 'has_property']:
-                related_from_graph.add(p.to_word)
+            if p.to_node:
+                related_from_graph.add(p.to_node.connection_text)
     
     if related_from_graph:
         matches = [c for c in concepts if c in related_from_graph]

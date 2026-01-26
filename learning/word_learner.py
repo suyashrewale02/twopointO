@@ -96,6 +96,44 @@ GRAMMAR_WORDS = {
 }
 
 
+def find_semantically_related(word, definition_words, already_learned):
+    """Find words in database that share semantic concepts with this word"""
+    from db.models import Connection, get_session
+    
+    if not definition_words:
+        return []
+    
+    key_concepts = set(w.lower() for w in definition_words[:5] if len(w) > 3)
+    
+    session = get_session()
+    try:
+        all_nodes = session.query(Connection).filter(
+            Connection.definition.isnot(None)
+        ).all()
+        
+        related = []
+        for node in all_nodes:
+            if node.connection_text.lower() == word.lower():
+                continue
+            if node.connection_text.lower() in already_learned:
+                continue
+            if not node.definition:
+                continue
+            
+            node_def_words = set(extract_definition_words(node.definition))
+            shared = key_concepts & node_def_words
+            
+            if len(shared) >= 1:
+                score = len(shared) / max(len(key_concepts), len(node_def_words))
+                if score >= 0.2 or len(shared) >= 2:
+                    related.append((node.connection_text.lower(), list(shared), score))
+        
+        related.sort(key=lambda x: x[2], reverse=True)
+        return [(r[0], r[1]) for r in related[:3]]
+    finally:
+        session.close()
+
+
 def lookup_dictionary(word):
     word_lower = word.lower()
     
@@ -309,6 +347,21 @@ def learn_word_deep(word, current_depth=0, max_depth=10, learned_words=None, all
         print(f"    {indent}  Key words: {', '.join(definition_words[:5])}")
     
     words_to_learn = [w for w in definition_words[:3] if w != word_lower and w not in learned_words]
+    
+    semantic_related = find_semantically_related(word_lower, definition_words, learned_words)
+    for related_word, shared_concepts in semantic_related:
+        create_path(word_lower, "semantically_related", related_word, confidence=0.85, update_if_higher=True)
+        create_path(related_word, "semantically_related", word_lower, confidence=0.85, update_if_higher=True)
+        all_connections.append({
+            "from": word_lower,
+            "to": related_word,
+            "strength": 0.85,
+            "depth": current_depth,
+            "type": "semantic",
+            "shared": shared_concepts
+        })
+        if current_depth == 0:
+            print(f"    {indent}  ⟷ {related_word} (semantic match via: {', '.join(shared_concepts[:3])})")
     
     if words_to_learn:
         print(f"    {indent}  Fetching {len(words_to_learn)} words in parallel...")

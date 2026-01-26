@@ -52,13 +52,17 @@ def get_or_create_node(text, node_type=None, definition=None):
 
 
 def get_paths_from(from_text, relation_type=None):
+    from sqlalchemy.orm import joinedload
     session = get_session()
     try:
         from_node = get_node(from_text)
         if not from_node:
             return []
         
-        query = session.query(Path).filter(Path.from_connection == from_node.connection_id)
+        query = session.query(Path).options(
+            joinedload(Path.from_node),
+            joinedload(Path.to_node)
+        ).filter(Path.from_connection == from_node.connection_id)
         if relation_type:
             query = query.filter(Path.relation_type == relation_type)
         
