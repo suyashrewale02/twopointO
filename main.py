@@ -50,8 +50,8 @@ def process_query(query):
                 print(f"  {token:<15} {'✗':<10} {'learned':<15} {source}")
                 if node and node.definition:
                     print(f"    → {node.type}: {node.definition[:60]}{'...' if len(node.definition or '') > 60 else ''}")
-                if connections > 0:
-                    print(f"    → Deep connections: {connections}")
+                if len(connections) > 0:
+                    print(f"    → Deep connections: {len(connections)}")
             elif node:
                 print(f"  {token:<15} {'✓':<10} {'exists':<15} {source}")
             else:
@@ -75,6 +75,7 @@ def process_query(query):
 
 def handle_definition_query(pattern_info):
     subject = pattern_info["subject"]
+    subject_words = subject.split()
     
     from db.crud import get_paths_from
     existing_node = get_node(subject)
@@ -93,6 +94,25 @@ def handle_definition_query(pattern_info):
             print(f"\n  Related concepts: {', '.join(related)}")
         
         return paths, None, None
+    
+    if len(subject_words) > 1 and not existing_node:
+        print(f"\nSTEP 5 — Combined subject '{subject}' not found. Trying individual words:")
+        all_word_paths = []
+        word_definitions = {}
+        
+        for word in subject_words:
+            word_node = get_node(word)
+            if word_node and word_node.definition:
+                print(f"  Found '{word}': {word_node.definition[:60]}...")
+                word_definitions[word] = word_node.definition
+                word_paths = traverse(word, max_depth=3)
+                all_word_paths.extend(word_paths)
+        
+        if word_definitions:
+            print(f"\nSTEP 6 — Answer (from individual words):")
+            for word, defn in word_definitions.items():
+                print(f"  • {word}: {defn}")
+            return all_word_paths, None, None
     
     print(f"\nSTEP 5 — Deep Learning (expanding '{subject}' up to 10 levels):")
     print(f"  Learning tree:")
@@ -382,6 +402,106 @@ def handle_inferred_query(pattern_info):
         answer = input("  > ").strip()
 
 
+def handle_opinion_query(pattern_info):
+    """Handle 'what do you think about X?' type questions"""
+    topic = pattern_info.get("topic", "")
+    
+    print(f"\nSTEP 5 — Opinion Query (asking about '{topic}'):")
+    
+    self_node = get_node("self")
+    if not self_node:
+        get_or_create_node("self", node_type="entity", definition="The Knowledge Graph AI system")
+    
+    paths = traverse("self", max_depth=3)
+    opinion_paths = [p for p in paths if topic in p.get("to", "").lower() or f"opinion_{topic}" in p.get("relation", "")]
+    
+    if opinion_paths:
+        print(f"  Found opinion about '{topic}'")
+        print(f"\nSTEP 6 — Answer:")
+        print(f"  {opinion_paths[0]['to']}")
+        return
+    
+    topic_node = get_node(topic)
+    if topic_node and topic_node.definition:
+        print(f"  I know about '{topic}': {topic_node.definition[:60]}...")
+    else:
+        print(f"  Learning about '{topic}' first...")
+        node, created, source, connections = learn_word_deep(topic, max_depth=2)
+        if node and node.definition:
+            print(f"  Learned: {node.definition[:60]}...")
+    
+    print(f"\nSTEP 6 — Learning my opinion:")
+    print(f"  What do I think about '{topic}'?")
+    answer = input("  > ").strip()
+    
+    if answer and answer.lower() != 'skip':
+        get_or_create_node(answer, node_type="opinion")
+        create_path("self", f"opinion_{topic}", answer, confidence=1.0)
+        print(f"  Learned: My opinion on '{topic}' is '{answer}'")
+
+
+def handle_self_state_query(pattern_info):
+    """Handle 'how are you?' type questions about AI's state"""
+    print(f"\nSTEP 5 — Self State Query:")
+    
+    self_node = get_node("self")
+    if not self_node:
+        get_or_create_node("self", node_type="entity", definition="The Knowledge Graph AI system")
+    
+    paths = traverse("self", max_depth=3)
+    state_paths = [p for p in paths if "state" in p.get("relation", "") or "feeling" in p.get("relation", "")]
+    
+    if state_paths:
+        print(f"  Found: self → {state_paths[0]['relation']} → {state_paths[0]['to']}")
+        print(f"\nSTEP 6 — Answer:")
+        print(f"  I'm {state_paths[0]['to']}!")
+        return
+    
+    print(f"  I don't have a state response set yet.")
+    print(f"\nSTEP 6 — Learning:")
+    print(f"  How should I respond to 'how are you?'")
+    answer = input("  > ").strip()
+    
+    if answer and answer.lower() != 'skip':
+        get_or_create_node(answer, node_type="state")
+        create_path("self", "has_state", answer, confidence=1.0)
+        create_path("how are you ?", "responds_with", answer, confidence=1.0)
+        get_or_create_node("how are you ?", node_type="learned_pattern")
+        create_path("how are you ?", "pattern_type", "greeting", confidence=1.0)
+        print(f"  Learned: I'll respond with '{answer}'")
+
+
+def handle_self_query(pattern_info):
+    """Handle questions about the AI itself like 'what is your name?'"""
+    property_name = pattern_info.get("property", "")
+    possessive = pattern_info.get("possessive", "your")
+    
+    print(f"\nSTEP 5 — Self Query (asking about AI's '{property_name}'):")
+    
+    self_node = get_node("self")
+    if not self_node:
+        get_or_create_node("self", node_type="entity", definition="The Knowledge Graph AI system")
+    
+    paths = traverse("self", max_depth=3)
+    property_paths = [p for p in paths if property_name in p.get("relation", "") or property_name in p.get("to", "")]
+    
+    if property_paths:
+        print(f"  Found: self → {property_paths[0]['relation']} → {property_paths[0]['to']}")
+        print(f"\nSTEP 6 — Answer:")
+        print(f"  My {property_name} is {property_paths[0]['to']}")
+        return
+    
+    print(f"  I don't have a '{property_name}' set yet.")
+    print(f"\nSTEP 6 — Learning:")
+    print(f"  What is my {property_name}?")
+    answer = input("  > ").strip()
+    
+    if answer and answer.lower() != 'skip':
+        get_or_create_node(answer, node_type=property_name)
+        create_path("self", f"has_{property_name}", answer, confidence=1.0)
+        print(f"  Learned: self has {property_name} → {answer}")
+
+
 def handle_request(pattern_info):
     verb = pattern_info.get("verb", "")
     target = pattern_info.get("target", "")
@@ -564,7 +684,22 @@ def main():
                     print(f"  Connected words: {[t for t in tokens if t not in ['?', '.', '!', ',']]}")
             continue
         
-        if pattern_info["type"] == "definition_query":
+        if pattern_info["type"] == "self_query":
+            handle_self_query(pattern_info)
+            pending_subject = None
+            pending_property = None
+        
+        elif pattern_info["type"] == "self_state_query":
+            handle_self_state_query(pattern_info)
+            pending_subject = None
+            pending_property = None
+        
+        elif pattern_info["type"] == "opinion_query":
+            handle_opinion_query(pattern_info)
+            pending_subject = None
+            pending_property = None
+        
+        elif pattern_info["type"] == "definition_query":
             result = handle_definition_query(pattern_info)
             if isinstance(result, tuple) and len(result) == 3:
                 paths, question_type, context = result

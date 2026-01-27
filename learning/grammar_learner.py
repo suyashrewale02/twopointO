@@ -48,11 +48,28 @@ def detect_pattern(tokens):
     types_only = [t[1] for t in token_types]
     
     has_question_word = types_only[0] == "question_word" if types_only else False
-    has_linking_verb = "linking_verb" in types_only
+    has_linking_verb = "linking_verb" in types_only or "verb" in types_only
     has_preposition = "preposition" in types_only
     ends_with_question = types_only[-1] == "punctuation" and tokens_lower[-1] == "?" if types_only else False
     starts_with_linking = types_only[0] == "linking_verb" if types_only else False
     starts_with_request = types_only[0] == "request_verb" if types_only else False
+    
+    if tokens_lower[0] == "how" and "you" in tokens_lower and ends_with_question:
+        return {
+            "pattern": "how_are_you",
+            "type": "self_state_query",
+            "expects": "state"
+        }
+    
+    if has_question_word and "think" in tokens_lower and "about" in tokens_lower and ends_with_question:
+        about_idx = tokens_lower.index("about")
+        topic_tokens = [t for t in tokens_lower[about_idx+1:-1] if t not in ["a", "an", "the"]]
+        return {
+            "pattern": "what_do_you_think_about_x",
+            "type": "opinion_query",
+            "topic": " ".join(topic_tokens),
+            "expects": "opinion"
+        }
     
     if has_question_word and has_linking_verb and has_preposition and ends_with_question:
         prep_idx = next((i for i, (t, ty) in enumerate(token_types) if ty == "preposition"), -1)
@@ -70,6 +87,19 @@ def detect_pattern(tokens):
     if has_question_word and has_linking_verb and ends_with_question:
         subject_tokens = [t for t, ty in token_types[2:-1] if ty != "article"]
         subject = " ".join(subject_tokens)
+        
+        if len(token_types) >= 4 and token_types[2][0] in ["your", "my"]:
+            possessive = token_types[2][0]
+            property_tokens = [t for t, ty in token_types[3:-1] if ty != "article"]
+            property_name = " ".join(property_tokens)
+            
+            return {
+                "pattern": "question_word_verb_possessive_x",
+                "type": "self_query" if possessive == "your" else "user_query",
+                "possessive": possessive,
+                "property": property_name,
+                "expects": "self_property"
+            }
         
         question_word = tokens_lower[0]
         question_node = get_node(question_word)
@@ -441,16 +471,17 @@ def check_learned_pattern(pattern_key):
         return similar
     
     words = pattern_key.split()
-    for word in words:
-        if word not in ['?', '.', '!', ',', 'a', 'an', 'the', 'i']:
-            semantic = find_pattern_via_semantic(word)
-            if semantic:
-                return semantic
+    content_words = [w for w in words if w not in ['?', '.', '!', ',', 'a', 'an', 'the', 'i']]
+    
+    if len(content_words) == 1:
+        semantic = find_pattern_via_semantic(content_words[0])
+        if semantic:
+            return semantic
     
     return None
 
 
-def find_similar_pattern(pattern_key, max_depth=5, threshold=0.4):
+def find_similar_pattern(pattern_key, max_depth=5, threshold=0.6):
     """Find similar patterns using deep graph traversal"""
     words = pattern_key.split()
     content_words = set(w.lower() for w in words if w not in ['?', '.', '!', ',', 'a', 'an', 'the', 'i'])
@@ -481,6 +512,8 @@ def find_similar_pattern(pattern_key, max_depth=5, threshold=0.4):
                 continue
             
             shared_words = content_words & lp_words
+            if len(shared_words) < 2:
+                continue
             direct_score = len(shared_words) / max(len(content_words), len(lp_words)) if shared_words else 0
             
             deep_score = 0

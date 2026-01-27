@@ -14,6 +14,9 @@ def create_node(text, node_type=None, definition=None):
     try:
         existing = get_node(text)
         if existing:
+            if (definition and not existing.definition) or (node_type and not existing.type):
+                return update_node(text, node_type=node_type if not existing.type else None, 
+                                   definition=definition if not existing.definition else None)
             return existing
         node = Connection(
             connection_text=text.lower(),
@@ -47,6 +50,13 @@ def update_node(text, node_type=None, definition=None):
 def get_or_create_node(text, node_type=None, definition=None):
     node = get_node(text)
     if node:
+        updated = False
+        if definition and not node.definition:
+            node = update_node(text, definition=definition)
+            updated = True
+        if node_type and not node.type:
+            node = update_node(text, node_type=node_type)
+            updated = True
         return node, False
     return create_node(text, node_type=node_type, definition=definition), True
 
