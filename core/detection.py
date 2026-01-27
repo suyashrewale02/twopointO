@@ -9,6 +9,7 @@ def lookup_token(token):
 
 def detect_tokens(tokens):
     """Look up all tokens and return list of results."""
+    print("\n--- Printing from detection ---")
     results = []
     for token in tokens:
         node = lookup_token(token)
