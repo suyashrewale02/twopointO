@@ -9,7 +9,7 @@ def process_subject(results, classification):
     if remaining:
         print("\n--- Printing from subject ---")
         for r in remaining:
-            print(f"  {r['label']}: {r['node_type']}")
+            print(f"  {r['label']}: {r['node_type']}, use_count={r['use_count']}")
             
             if classification == "instruction":
                 traverse_node(r['label'])

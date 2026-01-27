@@ -22,7 +22,7 @@ def run_query_loop():
             detection_types = {"control", "operator", "subject"}
             for result in results:
                 if result["node_type"] in detection_types:
-                    print(f"  {result['label']}: {result['node_type']}")
+                    print(f"  {result['label']}: {result['node_type']}, use_count={result['use_count']}")
             
             classification = classify_query(results)
             print(f"\n{classification}")

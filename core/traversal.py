@@ -22,6 +22,8 @@ def get_connections(node_id):
     ).all()
     results = []
     for c in connections:
+        # Increment use_count
+        c.use_count = (c.use_count or 0) + 1
         results.append({
             "id": c.id,
             "from_node_id": c.from_node_id,
@@ -29,25 +31,57 @@ def get_connections(node_id):
             "relation_strength": c.relation_strength,
             "use_count": c.use_count
         })
+    session.commit()
     session.close()
     return results
 
-def traverse_node(label):
-    """Find and print connections for a node."""
+def traverse_node(label, max_generations=5):
+    """Find and print connections for a node up to max_generations deep."""
     print("\n--- Printing from traversal ---")
+    print(f"  Parent: {label}")
+    
     node_id = get_node_id(label)
-    if node_id:
-        connections = get_connections(node_id)
-        if connections:
-            print(f"  Connections for {label}:")
+    if not node_id:
+        print(f"  Node '{label}' not found")
+        return []
+    
+    visited = set()
+    visited.add(node_id)
+    current_gen_ids = [node_id]
+    all_connections = []
+    
+    parent_id = node_id
+    
+    for gen in range(1, max_generations + 1):
+        if not current_gen_ids:
+            break
+            
+        print(f"\n  Generation {gen}:")
+        next_gen_ids = []
+        
+        for current_id in current_gen_ids:
+            connections = get_connections(current_id)
+            
             for conn in connections:
-                print(f"    id={conn['id']}, from={conn['from_node_id']}, to={conn['to_node_id']}, strength={conn['relation_strength']}, use_count={conn['use_count']}")
-                
-                # Find connected node label
-                if conn['from_node_id'] == node_id:
-                    connected_label = get_node_label(conn['to_node_id'])
+                # Find connected node id
+                if conn['from_node_id'] == current_id:
+                    connected_id = conn['to_node_id']
                 else:
-                    connected_label = get_node_label(conn['from_node_id'])
-                print(f"      -> connected node: {connected_label}")
-        return connections
-    return []
+                    connected_id = conn['from_node_id']
+                
+                # Skip if connected node is the parent
+                if connected_id == parent_id and gen > 1:
+                    continue
+                
+                all_connections.append(conn)
+                connected_label = get_node_label(connected_id)
+                print(f"    {connected_label} [{conn['from_node_id']} to {conn['to_node_id']}, strength={conn['relation_strength']}, use_count={conn['use_count']}]")
+                
+                # Add to next generation if not visited
+                if connected_id not in visited:
+                    visited.add(connected_id)
+                    next_gen_ids.append(connected_id)
+        
+        current_gen_ids = next_gen_ids
+    
+    return all_connections
