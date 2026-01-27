@@ -32,4 +32,4 @@ def classify_query(results):
     
     if "control" in node_types and "operator" in node_types:
         return "instruction"
-    return "understand"
+    return "Noted!! 👍👍📝"
