@@ -1,0 +1,50 @@
+[
+  {
+    "id": 101,
+    "from_node_id": 1,
+    "to_node_id": 2,
+    "relation_strength": 0.92,
+    "use_count": 180,
+    "last_used_at": "2026-01-27T12:10:00Z"
+  },
+  {
+    "id": 102,
+    "from_node_id": 1,
+    "to_node_id": 3,
+    "relation_strength": 0.75,
+    "use_count": 95,
+    "last_used_at": "2026-01-27T11:55:00Z"
+  },
+  {
+    "id": 103,
+    "from_node_id": 1,
+    "to_node_id": 4,
+    "relation_strength": 0.88,
+    "use_count": 160,
+    "last_used_at": "2026-01-27T11:45:00Z"
+  },
+  {
+    "id": 104,
+    "from_node_id": 1,
+    "to_node_id": 5,
+    "relation_strength": 0.60,
+    "use_count": 70,
+    "last_used_at": "2026-01-27T11:40:00Z"
+  },
+  {
+    "id": 105,
+    "from_node_id": 1,
+    "to_node_id": 6,
+    "relation_strength": 0.85,
+    "use_count": 210,
+    "last_used_at": "2026-01-27T12:00:00Z"
+  },
+  {
+    "id": 201,
+    "from_node_id": 7,
+    "to_node_id": 8,
+    "relation_strength": 1.0,
+    "use_count": 950,
+    "last_used_at": "2026-01-27T12:12:00Z"
+  }
+]

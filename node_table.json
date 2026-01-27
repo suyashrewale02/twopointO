@@ -1,0 +1,66 @@
+[
+  {
+    "id": 1,
+    "label": "apple",
+    "node_type": "entity",
+    "created_at": "2026-01-27T10:00:00Z",
+    "last_used_at": "2026-01-27T12:10:00Z",
+    "use_count": 120
+  },
+  {
+    "id": 2,
+    "label": "fruit",
+    "node_type": "entity",
+    "created_at": "2026-01-27T10:01:00Z",
+    "last_used_at": "2026-01-27T12:05:00Z",
+    "use_count": 200
+  },
+  {
+    "id": 3,
+    "label": "tree",
+    "node_type": "entity",
+    "created_at": "2026-01-27T10:02:00Z",
+    "last_used_at": "2026-01-27T11:50:00Z",
+    "use_count": 90
+  },
+  {
+    "id": 4,
+    "label": "red",
+    "node_type": "property",
+    "created_at": "2026-01-27T10:03:00Z",
+    "last_used_at": "2026-01-27T11:45:00Z",
+    "use_count": 150
+  },
+  {
+    "id": 5,
+    "label": "round",
+    "node_type": "property",
+    "created_at": "2026-01-27T10:04:00Z",
+    "last_used_at": "2026-01-27T11:40:00Z",
+    "use_count": 80
+  },
+  {
+    "id": 6,
+    "label": "eat",
+    "node_type": "action",
+    "created_at": "2026-01-27T10:05:00Z",
+    "last_used_at": "2026-01-27T12:00:00Z",
+    "use_count": 300
+  },
+  {
+    "id": 7,
+    "label": "what",
+    "node_type": "control",
+    "created_at": "2026-01-27T10:06:00Z",
+    "last_used_at": "2026-01-27T12:12:00Z",
+    "use_count": 1000
+  },
+  {
+    "id": 8,
+    "label": "is",
+    "node_type": "operator",
+    "created_at": "2026-01-27T10:07:00Z",
+    "last_used_at": "2026-01-27T12:12:00Z",
+    "use_count": 1200
+  }
+]
