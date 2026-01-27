@@ -25,3 +25,11 @@ def detect_tokens(tokens):
                 "use_count": None
             })
     return results
+
+def classify_query(results):
+    """Classify query as 'instruction' or 'understand'."""
+    node_types = {r["node_type"] for r in results if r["node_type"]}
+    
+    if "control" in node_types and "operator" in node_types:
+        return "instruction"
+    return "understand"

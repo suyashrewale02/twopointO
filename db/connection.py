@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, func
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
@@ -19,9 +19,9 @@ class Node(Base):
     id = Column(Integer, primary_key=True)
     label = Column(String)
     node_type = Column(String)
-    created_at = Column(DateTime)
-    last_used_at = Column(DateTime)
-    use_count = Column(Integer)
+    created_at = Column(DateTime, default=func.now())
+    last_used_at = Column(DateTime, default=func.now())
+    use_count = Column(Integer, default=1)
 
 class Connection(Base):
     __tablename__ = "connections_table"
@@ -29,9 +29,9 @@ class Connection(Base):
     id = Column(Integer, primary_key=True)
     from_node_id = Column(Integer)
     to_node_id = Column(Integer)
-    relation_strength = Column(Float)
-    use_count = Column(Integer)
-    last_used_at = Column(DateTime)
+    relation_strength = Column(Float, default=0.1)
+    use_count = Column(Integer, default=1)
+    last_used_at = Column(DateTime, default=func.now())
 
 def get_session():
     """Create database session."""

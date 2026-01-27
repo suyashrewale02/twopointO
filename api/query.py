@@ -1,5 +1,5 @@
 from core.tokenizer import tokenize
-from core.detection import detect_tokens
+from core.detection import detect_tokens, classify_query
 
 def run_query_loop():
     """Loop that takes input from terminal and prints results."""
@@ -14,12 +14,13 @@ def run_query_loop():
                 break
             
             tokens = tokenize(query)
-            print(f"\nTokens: {tokens}\n")
-            
             results = detect_tokens(tokens)
+            
             for result in results:
-                print(f"  {result['label']}: node_type={result['node_type']}, use_count={result['use_count']}")
-            print()
+                print(f"  {result['label']}: {result['node_type']}")
+            
+            classification = classify_query(results)
+            print(f"\n{classification}")
             
         except (EOFError, KeyboardInterrupt):
             print("\nExiting...")
